@@ -7,7 +7,7 @@ using namespace std;
 
 float str_to_float(string help);
 
-const int max_dot = 20;
+const int max_dot = 7;
 
 struct FileData {
 	float lat; //широта
@@ -21,7 +21,8 @@ struct FileData {
 struct  Node
 {
 	vector<FileData> data;
-	Node* one, * two, * three, * four;
+	Node* one, * two, * three, * four, *up;
+	bool is_see;
 	int count_dot;
 	float slat, slon, hight, width; // slat, slon - ліва верхня координата по широті, по довготі; hight, wight - розмір клвтинки по довготі, штроті
 };
@@ -35,9 +36,13 @@ private:
 	float minlon;//21
 	float maxlat;//57
 	float maxlon;//41
+	int help;
 	Node* R_tree;
 	vector<FileData> dataV;
 	void firstNode();
+	void push_new_dot(Node** nod, Node** parent, FileData dot);
+	void print(Node* tree, int u);
+	void fill_tree();
 };
 
 void Rtree::firstNode()
@@ -50,16 +55,20 @@ void Rtree::firstNode()
 	R_tree->two = NULL;
 	R_tree->three = NULL;
 	R_tree->four = NULL;
+	R_tree->up = NULL;
 }
 
 Rtree::Rtree() {
-	minlat = 40;
-	minlon = 21;
-	maxlat = 57;
-	maxlon = 41;
-	R_tree = new Node;
+	minlat = 4000;
+	minlon = 2100;
+	maxlat = 5700;
+	maxlon = 4100;
+	help = 0;
+	R_tree =NULL;
 	ReadFromFile();
-	firstNode();
+	fill_tree();
+	print(R_tree, 0);
+	//firstNode();
 }
 
 void Rtree::ReadFromFile() {
@@ -76,12 +85,12 @@ void Rtree::ReadFromFile() {
 				tmplat += str[i];
 				i++;
 			}i++;
-			help.lat = str_to_float(tmplat);
+			help.lat = str_to_float(tmplat)*100;
 			while (str[i] != ';') {
 				tmplong += str[i];
 				i++;
 			}i++;
-			help.longitude = str_to_float(tmplong);
+			help.longitude = str_to_float(tmplong)*100;
 			while (str[i] != ';') {
 				help.type += str[i];
 				i++;
@@ -109,12 +118,125 @@ void Rtree::ReadFromFile() {
 	}*/
 }
 
+void Rtree::fill_tree()
+{
+	for (int i = 0; i < dataV.size(); i++)
+	{
+		push_new_dot(&R_tree, NULL, dataV[i]);
+	}
+}
+
+void Rtree::push_new_dot(Node **nod, Node **parent, FileData dot)
+{
+	if (*nod == NULL) 
+	{
+		*nod = new Node;
+		(*nod)->one = NULL;
+		(*nod)->two = NULL;
+		(*nod)->three = NULL;
+		(*nod)->four = NULL;
+		if (parent == NULL) {
+			(*nod)->slat = maxlat;
+			(*nod)->slon = minlon;
+			(*nod)->hight = maxlat - minlat;
+			(*nod)->width = maxlon - minlon;
+			(*nod)->data.push_back( dot);
+			(*nod)->count_dot =1;
+			(*nod)->is_see = false;
+			(*nod)->up = NULL;
+			return;
+		}
+		else {
+			if ((*parent)->slon + ((*parent)->width / 2)  > dot.longitude) { (*nod)->slon = (*parent)->slon; }
+			else { (*nod)->slon = (*parent)->slon+ ((*parent)->width / 2) ; }
+			if ((*parent)->slat - ((*parent)->hight / 2)  > dot.lat) { (*nod)->slat = (*parent)->slat; }
+			else { (*nod)->slat = (*parent)->slat - ((*parent)->hight / 2) ; }
+			(*nod)->hight = ((*parent)->hight / 2) ;
+			(*nod)->width = ((*parent)->width / 2) ;
+			(*nod)->data.push_back(dot);
+			(*nod)->count_dot = 1;
+			(*nod)->is_see = false;
+			(*nod)->up = *parent;
+			return;
+		}
+	}
+	else {
+		if ((*nod)->count_dot >= max_dot && (*nod)->one==NULL && (*nod)->two == NULL && (*nod)->three == NULL && (*nod)->four == NULL)
+		{
+			(*nod)->data.push_back(dot);
+			for (int it = 0; it < (*nod)->data.size(); it++) {
+				if ((*nod)->slon + ((*nod)->width / 2) > (*nod)->data[it].longitude && (*nod)->slat - ((*nod)->hight / 2)> (*nod)->data[it].lat)
+				{
+					push_new_dot(&((*nod)->one), &(*nod), (*nod)->data[it]);
+				}
+				if ((*nod)->slon + ((*nod)->width / 2) > (*nod)->data[it].longitude && (*nod)->slat - ((*nod)->hight / 2) <= (*nod)->data[it].lat)
+				{
+					push_new_dot(&((*nod)->three), &(*nod), (*nod)->data[it]);
+				}
+				if ((*nod)->slon + ((*nod)->width / 2)  <= (*nod)->data[it].longitude && (*nod)->slat - ((*nod)->hight / 2)  > (*nod)->data[it].lat)
+				{
+					push_new_dot(&((*nod)->two), &(*nod), (*nod)->data[it]);
+				}
+				if ((*nod)->slon + ((*nod)->width / 2)  <= (*nod)->data[it].longitude && (*nod)->slat - ((*nod)->hight / 2)  <= (*nod)->data[it].lat)
+				{
+					push_new_dot(&((*nod)->four), &(*nod), (*nod)->data[it]);
+				}
+			}
+			(*nod)->data.clear();
+			cout << (*nod)->data.size() << endl;
+			return;
+		}
+		if ((*nod)->count_dot >= max_dot )//&& ((*nod)->one != NULL || (*nod)->two != NULL || (*nod)->three != NULL || (*nod)->four != NULL))
+		{
+			if ((*nod)->slon + ((*nod)->width / 2) > dot.longitude && (*nod)->slat - ((*nod)->hight / 2) > dot.lat)
+			{
+				push_new_dot(&((*nod)->one), &(*nod), dot);
+			}
+			if ((*nod)->slon + ((*nod)->width / 2) > dot.longitude && (*nod)->slat - ((*nod)->hight / 2) <= dot.lat)
+			{
+				push_new_dot(&((*nod)->three), &(*nod), dot);
+			}
+			if ((*nod)->slon + ((*nod)->width / 2) <= dot.longitude && (*nod)->slat - ((*nod)->hight / 2) > dot.lat)
+			{
+				push_new_dot(&((*nod)->two), &(*nod), dot);
+			}
+			if ((*nod)->slon + ((*nod)->width / 2) <= dot.longitude && (*nod)->slat - ((*nod)->hight / 2) <= dot.lat)
+			{
+				push_new_dot(&((*nod)->four), &(*nod), dot);
+			}
+			return;
+		}
+		if ((*nod)->count_dot < max_dot) {
+			(*nod)->data.push_back(dot);
+			(*nod)->count_dot = (*nod)->count_dot + 1;
+			(*nod)->is_see = false;
+			return;
+		}
+	}
+}
+
+void Rtree::print(Node* tree, int u)
+{
+	if (tree == NULL) {  return; }
+	else
+	{
+		print(tree->one, u++);
+		print(tree->three, u++);
+		print(tree->two, u++);
+		print(tree->four, u++);
+		for (int i = 0; i < u; ++i) {
+			for (int j = 0; j < tree->data.size(); j++)
+			{
+				cout << tree->data[j].type << " ";
+			}
+			u--;
+		}
+	}
+}
 
 int main()
 {
 	Rtree tree;
-	//tree.ReadFromFile();
-
 	return 0;
 }
 
