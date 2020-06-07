@@ -7,7 +7,9 @@ using namespace std;
 
 float str_to_float(string help);
 
-const int max_dot = 7;
+const int max_dot = 50;
+
+const float R_e = 6371.008;
 
 struct FileData {
 	float lat; //широта
@@ -23,7 +25,7 @@ struct  Node
 	vector<FileData> data;
 	Node* one, * two, * three, * four, *up;
 	bool is_see;
-	int count_dot;
+	long int count_dot;
 	float slat, slon, hight, width; // slat, slon - ліва верхня координата по широті, по довготі; hight, wight - розмір клвтинки по довготі, штроті
 };
 
@@ -36,39 +38,25 @@ private:
 	float minlon;//21
 	float maxlat;//57
 	float maxlon;//41
-	int help;
 	Node* R_tree;
 	vector<FileData> dataV;
-	void firstNode();
 	void push_new_dot(Node** nod, Node** parent, FileData dot);
 	void print(Node* tree, int u);
 	void fill_tree();
+	float distance(FileData dot1, FileData dot2);
+	FileData dot_for_look(FileData start, float alpha, float size_step);
 };
 
-void Rtree::firstNode()
-{
-	R_tree->slat = minlat;
-	R_tree->slon = minlon;
-	R_tree->hight = maxlon - minlon;
-	R_tree->width = maxlat - minlat;
-	R_tree->one = NULL;
-	R_tree->two = NULL;
-	R_tree->three = NULL;
-	R_tree->four = NULL;
-	R_tree->up = NULL;
-}
-
 Rtree::Rtree() {
-	minlat = 4000;
-	minlon = 2100;
-	maxlat = 5700;
-	maxlon = 4100;
-	help = 0;
+	minlat = 40;
+	minlon = 21;
+	maxlat = 57;
+	maxlon = 41;
 	R_tree =NULL;
 	ReadFromFile();
 	fill_tree();
-	print(R_tree, 0);
-	//firstNode();
+	cout << distance(dataV[0], dataV[1]) << endl;
+	//print(R_tree, 0);
 }
 
 void Rtree::ReadFromFile() {
@@ -85,12 +73,12 @@ void Rtree::ReadFromFile() {
 				tmplat += str[i];
 				i++;
 			}i++;
-			help.lat = str_to_float(tmplat)*100;
+			help.lat = str_to_float(tmplat);
 			while (str[i] != ';') {
 				tmplong += str[i];
 				i++;
 			}i++;
-			help.longitude = str_to_float(tmplong)*100;
+			help.longitude = str_to_float(tmplong);
 			while (str[i] != ';') {
 				help.type += str[i];
 				i++;
@@ -183,10 +171,9 @@ void Rtree::push_new_dot(Node **nod, Node **parent, FileData dot)
 				}
 			}
 			(*nod)->data.clear();
-			cout << (*nod)->data.size() << endl;
 			return;
 		}
-		if ((*nod)->count_dot >= max_dot )//&& ((*nod)->one != NULL || (*nod)->two != NULL || (*nod)->three != NULL || (*nod)->four != NULL))
+		if ((*nod)->count_dot >= max_dot )
 		{
 			if ((*nod)->slon + ((*nod)->width / 2) > dot.longitude && (*nod)->slat - ((*nod)->hight / 2) > dot.lat)
 			{
@@ -232,6 +219,24 @@ void Rtree::print(Node* tree, int u)
 			u--;
 		}
 	}
+}
+
+float Rtree::distance(FileData dot1, FileData dot2)
+{
+	float dX = (cos(dot2.lat/57.4)) * (cos(dot2.longitude / 57.4)) - (cos(dot1.lat / 57.4)) * (cos(dot1.longitude / 57.4));
+	float dY = (cos(dot2.lat / 57.4)) * (sin(dot2.longitude / 57.4)) - (cos(dot1.lat / 57.4)) * (sin(dot1.longitude / 57.4));
+	float dZ = sin(dot2.lat / 57.4) - sin(dot1.lat / 57.4);
+	float Cn = sqrt(dX * dX + dY * dY + dZ * dZ);
+	float alfa = acos(1 -( (R_e* R_e*Cn * Cn) / (2 * (R_e * R_e))));
+	float l = R_e * alfa;
+	return l;
+}
+
+FileData Rtree::dot_for_look(FileData start, float alpha, float size_step)
+{
+	FileData help;
+	help.longitude = start.longitude + size_step / sin(alpha / 57.5);
+	help.lat = start.lat + size_step / cos(alpha / 57.5);
 }
 
 int main()
