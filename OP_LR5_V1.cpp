@@ -31,36 +31,43 @@ struct  Node
 
 class Rtree {
 public:
-	Rtree();
+	Rtree(string s);
 	void ReadFromFile();
+	void find_around(float lat1, float lon1, float size, string type1, string subtype1);
 private:
 	float minlat;//40
 	float minlon;//21
 	float maxlat;//57
 	float maxlon;//41
+	string file_name;
 	Node* R_tree;
 	vector<FileData> dataV;
 	void push_new_dot(Node** nod, Node** parent, FileData dot);
-	void print(Node* tree, int u);
 	void fill_tree();
 	float distance(FileData dot1, FileData dot2);
 	FileData dot_for_look(FileData start, float alpha, float size_step);
+	vector<FileData> find_node(FileData dot, Node* nod, string type1, string subtype);
+	void show_data(FileData dot);
 };
 
-Rtree::Rtree() {
+void Rtree::show_data(FileData dot)
+{
+	cout <<dot.lat<<"; "<<dot.longitude<<"; "<< dot.type << "; " << dot.subtype << "; " << dot.name << "; " << dot.address <<";"<< endl;
+}
+
+Rtree::Rtree(string s) {
 	minlat = 40;
 	minlon = 21;
 	maxlat = 57;
 	maxlon = 41;
+	file_name = s;
 	R_tree =NULL;
 	ReadFromFile();
 	fill_tree();
-	cout << distance(dataV[0], dataV[1]) << endl;
-	//print(R_tree, 0);
 }
 
 void Rtree::ReadFromFile() {
-	ifstream fin("ukraine_poi.csv");
+	ifstream fin(file_name);
 	if (!fin.is_open()) { cout << "Problem with file."; }
 	else {
 		float a = 0;
@@ -99,11 +106,6 @@ void Rtree::ReadFromFile() {
 			tmplat.clear(); tmplong.clear(); help.type.clear(); help.subtype.clear(); help.name.clear(); help.address.clear();
 		}
 	}
-
-	/*long int size = dataV.size();
-	for (int i = 0; i < size; i++) {
-		cout << dataV[i].lat << " " << dataV[i].longitude << endl;
-	}*/
 }
 
 void Rtree::fill_tree()
@@ -202,25 +204,6 @@ void Rtree::push_new_dot(Node **nod, Node **parent, FileData dot)
 	}
 }
 
-void Rtree::print(Node* tree, int u)
-{
-	if (tree == NULL) {  return; }
-	else
-	{
-		print(tree->one, u++);
-		print(tree->three, u++);
-		print(tree->two, u++);
-		print(tree->four, u++);
-		for (int i = 0; i < u; ++i) {
-			for (int j = 0; j < tree->data.size(); j++)
-			{
-				cout << tree->data[j].type << " ";
-			}
-			u--;
-		}
-	}
-}
-
 float Rtree::distance(FileData dot1, FileData dot2)
 {
 	float dX = (cos(dot2.lat/57.4)) * (cos(dot2.longitude / 57.4)) - (cos(dot1.lat / 57.4)) * (cos(dot1.longitude / 57.4));
@@ -232,16 +215,88 @@ float Rtree::distance(FileData dot1, FileData dot2)
 	return l;
 }
 
+vector<FileData> Rtree::find_node(FileData dot, Node* nod, string type1, string subtype1)
+{
+	vector <FileData> help;
+	if ((nod)->one == NULL && (nod)->two == NULL && (nod)->three == NULL && (nod)->four == NULL)
+	{
+		if (!(nod)->is_see) { (nod)->is_see = true; help = nod->data; 
+			for (int i = 0; i < help.size(); i++) {
+				if (help[i].type == type1 && subtype1 == "")
+				{
+					show_data(help[i]);
+				}
+				if (help[i].type == type1 && subtype1 != "" && help[i].subtype == subtype1)
+				{
+					show_data(help[i]);
+				}
+			}
+		}
+		return help;
+	}
+	if ((nod)->slon + ((nod)->width / 2) > dot.longitude && (nod)->slat - ((nod)->hight / 2) > dot.lat)
+	{
+		find_node(dot, ((nod)->one), type1, subtype1);
+	}
+	if ((nod)->slon + ((nod)->width / 2) > dot.longitude && (nod)->slat - ((nod)->hight / 2) <= dot.lat)
+	{
+		find_node(dot, ((nod)->three), type1, subtype1);
+	}
+	if ((nod)->slon + ((nod)->width / 2) <= dot.longitude && (nod)->slat - ((nod)->hight / 2) > dot.lat)
+	{
+		find_node(dot, ((nod)->two), type1, subtype1);
+	}
+	if ((nod)->slon + ((nod)->width / 2) <= dot.longitude && (nod)->slat - ((nod)->hight / 2) <= dot.lat)
+	{
+		find_node(dot, ((nod)->four), type1, subtype1);
+	}
+	return help;
+}
+
 FileData Rtree::dot_for_look(FileData start, float alpha, float size_step)
 {
 	FileData help;
 	help.longitude = start.longitude + size_step / sin(alpha / 57.5);
 	help.lat = start.lat + size_step / cos(alpha / 57.5);
+	return help;
 }
 
-int main()
+void Rtree::find_around(float lat1, float lon1, float size, string type1, string subtype1)
 {
-	Rtree tree;
+	FileData start, now_dot; start.longitude = lon1; start.lat = lat1; 
+	float alpha;
+	vector <FileData> help;
+	for (alpha = 0; alpha < 360; alpha++)
+	{
+		now_dot.longitude = lon1; now_dot.lat = lat1;
+		float step_size = 0.001;
+		while (distance(start, now_dot) < size)
+		{
+			help = find_node(now_dot, R_tree, type1, subtype1);
+			step_size += 0.001;
+			now_dot = dot_for_look(start, alpha, step_size);
+		}
+	}
+
+}
+
+int main(int arg, char* argv[])
+{
+	setlocale(LC_ALL, "Russian");
+	string a, b,c,d,e,f="";
+	float lat, lon, size;
+	if (arg < 6) { cout << "Not all data \n"; }
+	else {
+		a = argv[1];
+		b = argv[2]; lat = str_to_float(b);
+		c = argv[3]; lon = str_to_float(c);
+		d = argv[4]; size = str_to_float(d);
+		e = argv[5];
+		a = "data.csv"; lat = 30.212; lon = 35.872; size = 20; e = "shop";
+		if (arg == 7) { f = argv[6]; }
+		Rtree tree(a);
+		tree.find_around(lat, lon, size, e, f);
+	}
 	return 0;
 }
 
